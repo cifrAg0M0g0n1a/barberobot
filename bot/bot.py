@@ -9,10 +9,9 @@ from aiogram.types import (  # pyright: ignore[reportMissingImports]
     InlineKeyboardMarkup,
 )
 from bot.callbacks import CancelCallback, handle_cancel_callback
-from config import BOT_TOKEN
+from config import BOT_TOKEN, ADDRESS, CONTACT
 import logging
 from database.database import get_user_records, add_user_if_not_exists
-from settings import ADDRESS, CONTACT
 from utils.format_datetime import format_dt
 
 logger = logging.getLogger(__name__)

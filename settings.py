@@ -8,5 +8,3 @@ SERVICE_DURATION_MIN = 60
 TIMEZONE = ZoneInfo("Asia/Yekaterinburg")
 
 PRICE = 1500
-ADDRESS = "г. Уфа, ул. ..."
-CONTACT = "@agomogon1a"
