@@ -12,3 +12,7 @@ if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN not set")
 if not OWNER_ID:
     raise RuntimeError("OWNER_ID not set")
+if not CONTACT:
+    raise RuntimeError("CONTACT not set")
+if not ADDRESS:
+    raise RuntimeError("ADDRESS not set")
