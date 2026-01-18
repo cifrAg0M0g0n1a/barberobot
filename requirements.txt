@@ -13,7 +13,9 @@ fastapi==0.128.0
 frozenlist==1.8.0
 h11==0.16.0
 idna==3.11
+Jinja2==3.1.6
 magic-filter==1.0.12
+MarkupSafe==3.0.3
 multidict==6.7.0
 propcache==0.4.1
 pydantic==2.12.5

@@ -1,15 +1,24 @@
-from aiogram import Bot, Dispatcher  # pyright: ignore[reportMissingImports]
-from aiogram.filters import (  # pyright: ignore[reportMissingImports]
+from aiogram import Bot, Dispatcher
+from aiogram.filters import (
     CommandStart,
     Command,
 )
-from aiogram.types import (  # pyright: ignore[reportMissingImports]
+from aiogram.types import (
+    KeyboardButton,
     Message,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    WebAppInfo,
 )
-from bot.callbacks import CancelCallback, handle_cancel_callback
-from config import BOT_TOKEN, ADDRESS, CONTACT
+import sys
+from pathlib import Path
+
+if str(Path(__file__).parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from callbacks import CancelCallback, handle_cancel_callback
+from config import BOT_TOKEN, ADDRESS, CONTACT, WEBAPP_URL
 import logging
 from database.database import get_user_records, add_user_if_not_exists
 from utils.format_datetime import format_dt
@@ -39,11 +48,10 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
         await message.answer(
             "👋 <b>Привет!</b> Я — Ваш персональный бот для записи на стрижку ✂️\n\n"
             "Здесь Вы можете:\n"
-            "• 📅 Записаться на удобное время - /record\n"
-            "• 👀 Просмотреть свои записи - /show\n"
-            "• ❌ И тут же отменить запись! - /show\n"
-            "• 📞 А также получить контакт мастера - /contact\n\n"
-            "Начнём? Просто используйте команды выше или нажмите на бургер-кнопку, расположенную слева от текстового поля 😉",
+            "• 📅 Записаться на удобное время, нажав на кнопку «Записаться» слева от текстового поля\n"
+            "• 👀 Просмотреть или отменить свои записи - /show\n"
+            "• 📞 Получить контакт мастера - /contact\n\n"
+            "Начнём? Просто используйте команды выше или введите «/» в текстовое поле для просмотра всех доступных команд 😉",
             parse_mode="HTML",
         )
 
@@ -120,7 +128,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     async def all_messages(message: Message):
         reply_text = (
             "Извините, я вас не понимаю 😥\n\n"
-            "Все доступные команды можно посмотреть, нажав на бургер-кнопку слева от текстового поля ☺️"
+            "Вы можете ввести «/» в текстовое поле для просмотра всех доступных команд ☺️"
         )
 
         await message.answer(reply_text)

@@ -1,7 +1,9 @@
+from datetime import date, datetime
 import sqlite3
-from typing import List, Tuple
+from typing import List, Optional, Tuple
+from pathlib import Path
 
-DB_PATH = "database/db.sqlite3"
+DB_PATH = str(Path(__file__).parent.parent / "database" / "db.sqlite3")
 
 
 # ---------- Работа с пользователями ----------
@@ -70,6 +72,53 @@ def get_record(record_id: int):
     row = cursor.fetchone()
     conn.close()
     return row
+
+
+def get_service(name: str) -> Optional[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, price FROM services WHERE name = ?", (name,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        service_id, name, price = row
+        return {"id": service_id, "name": name, "price": price}
+    return None
+
+
+def get_slots_for_date(selected_date: date) -> List[str]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT datetime FROM records WHERE date(datetime) = ?",
+        (selected_date.isoformat(),),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    slots = [
+        datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S").strftime("%H:%M") for row in rows
+    ]
+    return slots
+
+
+def add_record_cut(
+    user_id: int,
+    datetime_obj: datetime,
+    service_id: int,
+    name: str,
+    phone: str,
+):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO records (user_id, datetime, service_id, name, phone, created_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        """,
+        (user_id, datetime_obj.isoformat(sep=" "), service_id, name, phone),
+    )
+    conn.commit()
+    conn.close()
 
 
 # ---------- Прочие функции, при необходимости ----------

@@ -1,6 +1,12 @@
+import sys
+from pathlib import Path
+
+if str(Path(__file__).parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import logging
-from aiogram.types import CallbackQuery  # pyright: ignore[reportMissingImports]
-from aiogram.filters.callback_data import (  # pyright: ignore[reportMissingImports]
+from aiogram.types import CallbackQuery
+from aiogram.filters.callback_data import (
     CallbackData,
 )
 from config import OWNER_ID
