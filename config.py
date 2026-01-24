@@ -17,3 +17,5 @@ if not CONTACT:
     raise RuntimeError("CONTACT not set")
 if not ADDRESS:
     raise RuntimeError("ADDRESS not set")
+if not WEBAPP_URL:
+    raise RuntimeError("WEBAPP_URL not set")

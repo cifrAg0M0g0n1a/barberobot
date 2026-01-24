@@ -1,0 +1,6 @@
+createUser = "/create-user"
+getUser = "/get-user"
+getUsers = "/users"
+getUserRecords = "/records"
+getRecordById = "/get-record"
+deleteRecord = "/delete-record"

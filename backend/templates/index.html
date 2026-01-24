@@ -7,48 +7,54 @@
     <title>Запись на стрижку</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/imask"></script>
 </head>
 
 <body>
     <div class="page-content">
-        <h1>Запись на услугу</h1>
+        <div class="card">
+            <h1>Запись на стрижку</h1>
 
-        <div class="form-group">
-            <label for="date">Выберите дату:</label>
-            <input type="date" id="date" name="date" required>
-        </div>
-
-        <div class="form-group">
-            <label>Выберите время:</label>
-            <div id="timeSlots" class="time-slots"></div>
-        </div>
-
-        <div class="form-group">
-            <div class="service-info">
-                <label>Услуга:</label>
-                <span id="serviceName"></span>
-                <label style="margin-top: 8px;">Цена:</label>
-                <span id="servicePrice"></span>
+            <div class="form-group">
+                <label for="date">📅 Дата</label>
+                <input type="date" id="date" name="date" required>
             </div>
-        </div>
 
-        <div class="form-group">
-            <label>Ваше имя:</label>
-            <input type="text" id="userName" required>
-
-            <label>Телефон:</label>
-            <input type="tel" id="userPhone" required>
-        </div>
-
-        <div class="form-group">
-            <label>Адрес оказания услуги:</label>
-            <div class="address-info">
-                <p><span id="address"></span></p>
+            <div class="form-group">
+                <label>⏰ Время</label>
+                <div id="timeSlots" class="time-slots"></div>
             </div>
-        </div>
 
-        <button id="submitBtn">Записаться</button>
-        <div id="status"></div>
+            <div class="form-group service-card">
+                <div class="service-info">
+                    <span class="service-label">Услуга</span>
+                    <span id="serviceName"></span>
+
+                    <span class="service-label">Цена</span>
+                    <span id="servicePrice"></span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>👤 Имя</label>
+                <input type="text" id="userName" placeholder="Имя" required>
+            </div>
+
+            <div class="form-group">
+                <label>📞 Телефон</label>
+                <input type="tel" id="userPhone" required placeholder="+7 (000) 000 00-00"
+                    pattern="\+7 \(\d{3}\) \d{3} \d{2}-\d{2}" title="Введите номер в формате +7 (000) 000 00-00">
+            </div>
+            <div class="form-group">
+                <label>📍 Адрес</label>
+                <div class="address-info">
+                    <span id="address"></span>
+                </div>
+            </div>
+
+            <button id="submitBtn">Записаться</button>
+            <div id="status"></div>
+        </div>
     </div>
 
     <script src="/static/app.js"></script>

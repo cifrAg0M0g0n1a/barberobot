@@ -10,8 +10,9 @@ from aiogram.filters.callback_data import (
     CallbackData,
 )
 from config import OWNER_ID
-from database.database import get_record, delete_record
 from utils.format_datetime import format_dt
+from bot.constants.endpoints import deleteRecord, getRecordById
+from helpers.http import backend_get, backend_delete
 
 logger = logging.getLogger(__name__)
 
@@ -24,17 +25,23 @@ async def handle_cancel_callback(
     bot, query: CallbackQuery, callback_data: CancelCallback
 ):
     record_id = callback_data.record_id
+    try:
+        res = await backend_get(f"{getRecordById}/{record_id}")
+        row = res.json()
+    except Exception as e:
+        logger.error(f"Не удалось получить запись с айди {record_id}")
+        await query.message.edit_text("Не удалось отменить запись😥\nПопробуйте позже.")
+        return
 
-    row = get_record(record_id)
     if not row:
         await query.message.edit_text("Запись уже удалена")
         logger.info(f"Запись {record_id} уже удалена")
         return
 
-    user_id, user_record_name, dt, username, service_name = row
+    user_id, user_record_name, dt, username, service_name, address = row
 
     try:
-        delete_record(record_id)
+        await backend_delete(f"{deleteRecord}/{record_id}")
     except Exception as e:
         logger.error(f"Ошибка при удалении записи {record_id}: {e}")
         await query.message.edit_text("Не удалось отменить запись😥\nПопробуйте позже.")
@@ -43,13 +50,13 @@ async def handle_cancel_callback(
     formatted_dt = format_dt(dt)
 
     await query.message.edit_text(
-        f"✅ Ваша запись на услугу «{service_name}» {formatted_dt} отменена"
+        f"✅ Ваша запись на услугу «{service_name}» {formatted_dt} по адресу «{address}» отменена"
     )
 
     try:
         await bot.send_message(
             OWNER_ID,
-            f"💭 Клиент {user_record_name} отменил запись на {formatted_dt}\nУслуга: {service_name}\nТГ: @{username}",
+            f"💭 Клиент {user_record_name} отменил запись на {formatted_dt} по адресу: {address}\nУслуга: {service_name}\nТГ: @{username}",
         )
     except Exception as e:
         logger.error(f"Ошибка при уведомлении мастера: {e}")

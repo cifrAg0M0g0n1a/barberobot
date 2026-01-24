@@ -4,12 +4,9 @@ from aiogram.filters import (
     Command,
 )
 from aiogram.types import (
-    KeyboardButton,
     Message,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
-    WebAppInfo,
 )
 import sys
 from pathlib import Path
@@ -17,10 +14,11 @@ from pathlib import Path
 if str(Path(__file__).parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from bot.constants.endpoints import createUser, getUser, getUserRecords, getUsers
+from helpers.http import backend_post, backend_get
 from callbacks import CancelCallback, handle_cancel_callback
-from config import BOT_TOKEN, ADDRESS, CONTACT, WEBAPP_URL
+from config import BOT_TOKEN, ADDRESS, CONTACT
 import logging
-from database.database import get_user_records, add_user_if_not_exists
 from utils.format_datetime import format_dt
 
 logger = logging.getLogger(__name__)
@@ -33,16 +31,22 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     # /start
     @dp.message(CommandStart())
     async def start_handler(message: Message):
+        user_id = message.from_user.id
+
         try:
-            add_user_if_not_exists(
-                user_id=message.from_user.id,
-                name=message.from_user.full_name,
-                username=message.from_user.username or "",
+            await backend_post(
+                createUser,
+                {
+                    "user_id": message.from_user.id,
+                    "name": message.from_user.full_name,
+                    "username": message.from_user.username or "",
+                },
             )
-            logger.info(f"Пользователь с id={message.from_user.id} успешно сохранен")
+            logger.info(f"Пользователь с id={user_id} успешно сохранен или пропущен")
+
         except Exception as e:
             logger.error(
-                f"Не удалось сохранить пользователя {message.from_user.id}: {e}"
+                f"Не удалось сохранить пользователя {message.from_user.id} {message.from_user.full_name} {message.from_user.username or ""}: {e}"
             )
 
         await message.answer(
@@ -64,11 +68,44 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
 
         logger.info(f"Пользователь {user_id} ввел /show")
 
+        logger.info(f"Пользователь {user_id} запросил данные пользователя")
         try:
-            records = get_user_records(user_id)
+            res = await backend_get(f"{getUser}/{user_id}")
+            user = res.json()
+        except Exception as e:
+            logger.error(f"Не удалось получить данные пользователя {user_id}")
+
+        if not user:
+            logger.info(
+                f"Пользователь {user_id} не найден. Он будет записан в базу данных"
+            )
+            try:
+                await backend_post(
+                    createUser,
+                    {
+                        "user_id": message.from_user.id,
+                        "name": message.from_user.full_name,
+                        "username": message.from_user.username or "",
+                    },
+                )
+                logger.info(f"Пользователь с id={user_id} успешно сохранен")
+            except Exception as e:
+                logger.error(
+                    f"Не удалось сохранить пользователя {message.from_user.id} {message.from_user.full_name} {message.from_user.username or ""}: {e}"
+                )
+                await message.answer(
+                    "Не удалось получить записи 😥\nПожалуйста, попробуйте позже"
+                )
+                return
+
+        try:
+            res = await backend_get(f"{getUsers}/{user_id}{getUserRecords}")
+            records = res.json()
         except Exception as e:
             logger.info(f"Ошибка при получении записей пользователя {user_id}: {e}")
-            await message.answer("Не удалось получить записи😥")
+            await message.answer(
+                "Не удалось получить записи 😥\nПожалуйста, попробуйте позже"
+            )
             return
 
         if not records:
@@ -77,7 +114,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
             return
 
         count = 1
-        for record_id, dt, name, service_name in records:
+        for record_id, dt, name, service_name, address in records:
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -97,7 +134,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
                 f"👤 {name}\n"
                 f"🕒 {formatted_dt}\n"
                 f"✂️ {service_name}\n"
-                f"📍 {address}",
+                f"📍 {address}\n",
                 reply_markup=keyboard,
                 parse_mode="HTML",
             )

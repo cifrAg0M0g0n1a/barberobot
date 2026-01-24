@@ -20,7 +20,8 @@ def get_user_records(user_id: int) -> List[Tuple[int, str, str, str]]:
             r.id,
             r.datetime,
             r.name,
-            s.name
+            s.name,
+            r.address
         FROM records r
         JOIN services s ON s.id = r.service_id
         WHERE r.user_id = ?
@@ -61,7 +62,7 @@ def get_record(record_id: int):
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT r.user_id, r.name, r.datetime, u.username, s.name
+        SELECT r.user_id, r.name, r.datetime, u.username, s.name, r.address
         FROM records r
         JOIN users u ON u.id = r.user_id
         JOIN services s ON s.id = r.service_id
@@ -107,23 +108,35 @@ def add_record_cut(
     service_id: int,
     name: str,
     phone: str,
+    address: str,
 ):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO records (user_id, datetime, service_id, name, phone, created_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        INSERT INTO records (user_id, datetime, service_id, name, phone, address, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
         """,
-        (user_id, datetime_obj.isoformat(sep=" "), service_id, name, phone),
+        (user_id, datetime_obj.isoformat(sep=" "), service_id, name, phone, address),
     )
     conn.commit()
     conn.close()
 
 
+def get_user(user_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name, username FROM users WHERE id = ?",
+        (user_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
 # ---------- Прочие функции, при необходимости ----------
 def create_tables():
-    """Создает все таблицы, если их нет"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -141,7 +154,7 @@ def create_tables():
         """
     CREATE TABLE IF NOT EXISTS services (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
+        name TEXT UNIQUE NOT NULL,
         price INTEGER NOT NULL
     )
     """
@@ -156,11 +169,28 @@ def create_tables():
         service_id INTEGER NOT NULL,
         phone TEXT NOT NULL,
         name TEXT NOT NULL,
+        address TEXT NOT NULL,
         created_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (service_id) REFERENCES services(id)
     )
     """
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def seed_services():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+    INSERT OR IGNORE INTO services (name, price)
+    VALUES (?, ?)
+    """,
+        ("Стрижка", 1500),
     )
 
     conn.commit()

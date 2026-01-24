@@ -2,6 +2,8 @@ let dateInput, timeSlotsContainer, serviceNameEl, servicePriceEl, addressEl;
 let nameInput, phoneInput, bookBtn, statusEl;
 let selectedTime = null;
 let userId = null;
+let username = null;
+let address = null;
 
 
 
@@ -11,6 +13,7 @@ if (window.Telegram && window.Telegram.WebApp) {
 
     if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
         userId = tg.initDataUnsafe.user.id;
+        username = tg.initDataUnsafe.user.username || null;
     }
 }
 
@@ -22,7 +25,8 @@ async function loadConfig() {
         if (servicePriceEl) servicePriceEl.textContent = service.price + " ₽";
 
         const addressRes = await fetch("/address");
-        const address = await addressRes.text();
+        const data = await addressRes.json();
+        address = data.address;
         if (addressEl) addressEl.textContent = address;
     } catch (e) {
         console.error("Ошибка загрузки конфигурации:", e);
@@ -35,6 +39,15 @@ async function loadConfig() {
 async function updateSlots(date) {
     if (!timeSlotsContainer) {
         console.error("timeSlotsContainer не найден");
+        return;
+    }
+
+    if (!date) {
+        timeSlotsContainer.innerHTML = `
+            <div class="time-placeholder">
+                Выберите дату
+            </div>
+        `;
         return;
     }
 
@@ -62,7 +75,11 @@ async function updateSlots(date) {
         });
     } catch (e) {
         console.error("Ошибка при получении слотов:", e);
-        timeSlotsContainer.innerHTML = "Ошибка";
+        timeSlotsContainer.innerHTML = `
+            <div class="time-placeholder">
+                Ошибка загрузки времени
+            </div>
+        `;
     }
 }
 
@@ -78,26 +95,55 @@ async function addRecord() {
         return;
     }
 
+    if (address == null) {
+        statusEl.textContent = "Не удалось создать запись, так как адрес отсутствует";
+        statusEl.style.color = "#dc3545";
+        return;
+    }
+
     const data = {
         date: dateInput.value,
         time: selectedTime,
         name: nameInput.value,
         phone: phoneInput.value,
         userId: userId,
+        username: username,
+        address: address,
     };
 
+    if (!phoneInput.value.match(/^\+7 \(\d{3}\) \d{3} \d{2}-\d{2}$/)) {
+        statusEl.textContent = "Введите номер в формате +7 (000) 000 00-00";
+        statusEl.style.color = "#dc3545";
+        return;
+    }
+
     try {
-        const res = await fetch("/records", {
+        const res = await fetch("/add_record", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data)
         });
         const result = await res.json();
+        if (!res.ok) {
+            throw new Error(result.detail || "Ошибка при записи");
+        }
+
+        // dateInput.value = "";
+        // nameInput.value = "";
+        // phoneInput.value = "";
+        // selectedTime = null;
+
+        // timeSlotsContainer.innerHTML = `
+        //     <div class="time-placeholder">
+        //         Выберите дату
+        //     </div>
+        // `;
+
         statusEl.textContent = result.message || "Запись успешно добавлена!";
         statusEl.style.color = "#28a745";
     } catch (e) {
         console.error("Ошибка при записи:", e);
-        statusEl.textContent = "При записи произошла ошибка. Повторите позже";
+        statusEl.textContent = e.message || "При записи произошла ошибка. Повторите позже";
         statusEl.style.color = "#dc3545";
     }
 }
@@ -165,6 +211,21 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         return;
     }
+
+    timeSlotsContainer.innerHTML = `
+        <div class="time-placeholder">
+            Выберите дату
+        </div>
+    `;
+
+    const today = new Date();
+    today.setDate(today.getDate() + 1);
+    dateInput.min = today.toISOString().split("T")[0];
+
+    const maskOptions = {
+        mask: '+{7} (000) 000 00-00'
+    };
+    IMask(phoneInput, maskOptions);
 
     dateInput.addEventListener("change", (e) => updateSlots(e.target.value));
     bookBtn.addEventListener("click", addRecord);
