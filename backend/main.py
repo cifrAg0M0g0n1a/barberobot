@@ -17,6 +17,9 @@ from fastapi.middleware.cors import (
 from fastapi.staticfiles import StaticFiles
 from routes import router
 from backend.utils.logger import get_logger
+from backend.helpers.log_cleanup_task import start_log_cleanup
+from aiogram import Bot
+from config import BOT_TOKEN
 
 
 logger = get_logger(__name__)
@@ -25,13 +28,19 @@ formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
 logger.info("Backend logger initialized")
 
+bot = Bot(token=BOT_TOKEN)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Startup: backup and initialize DB")
+
     backup_db()
     create_tables()
     seed_services()
+
+    start_log_cleanup(bot)
+
     yield
     logger.info("Shutdown")
 

@@ -8,3 +8,5 @@ SERVICE_DURATION_MIN = 60
 TIMEZONE = ZoneInfo("Asia/Yekaterinburg")
 
 PRICE = 1500
+
+RETENTION_DAYS = 14
