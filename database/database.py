@@ -7,7 +7,7 @@ DB_PATH = str(Path(__file__).parent.parent / "database" / "db.sqlite3")
 
 
 # ---------- Работа с пользователями ----------
-def get_user_records(user_id: int) -> List[Tuple[int, str, str, str]]:
+def get_user_records(user_id: int) -> List[Tuple[int, str, str, str, str]]:
     """
     Возвращает все записи пользователя:
     (record_id, datetime, user_name, service_name)
@@ -28,6 +28,30 @@ def get_user_records(user_id: int) -> List[Tuple[int, str, str, str]]:
         ORDER BY r.datetime
         """,
         (user_id,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def get_all_records() -> List[Tuple[int, str, str, str, str, str, str]]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            r.id,
+            r.datetime,
+            r.name,
+            s.name,
+            r.address,
+            r.phone,
+            u.username
+        FROM records r
+        JOIN users u ON u.id = r.user_id
+        JOIN services s ON s.id = r.service_id
+        ORDER BY r.datetime
+        """,
     )
     rows = cursor.fetchall()
     conn.close()

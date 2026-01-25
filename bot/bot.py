@@ -14,10 +14,16 @@ from pathlib import Path
 if str(Path(__file__).parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from bot.constants.endpoints import createUser, getUser, getUserRecords, getUsers
+from bot.constants.endpoints import (
+    createUser,
+    getUser,
+    getUserRecords,
+    getUsers,
+    getAllRecords,
+)
 from helpers.http import backend_post, backend_get
 from callbacks import CancelCallback, handle_cancel_callback
-from config import BOT_TOKEN, ADDRESS, CONTACT
+from config import BOT_TOKEN, ADDRESS, CONTACT, OWNER_ID
 import logging
 from utils.format_datetime import format_dt
 
@@ -99,7 +105,10 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
                 return
 
         try:
-            res = await backend_get(f"{getUsers}/{user_id}{getUserRecords}")
+            if user_id == OWNER_ID:
+                res = await backend_get(f"{getAllRecords}/{user_id}")
+            else:
+                res = await backend_get(f"{getUsers}/{user_id}{getUserRecords}")
             records = res.json()
         except Exception as e:
             logger.info(f"Ошибка при получении записей пользователя {user_id}: {e}")
@@ -113,31 +122,83 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
             logger.info(f"У пользователя {user_id} нет активных записей")
             return
 
+        is_owner = user_id == OWNER_ID
         count = 1
-        for record_id, dt, name, service_name, address in records:
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="❌ Отменить",
-                            callback_data=CancelCallback(record_id=record_id).pack(),
-                        )
+
+        if user_id == OWNER_ID:
+            for record_id, dt, name, service_name, address, phone, username in records:
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="❌ Отменить",
+                                callback_data=CancelCallback(
+                                    record_id=record_id,
+                                    is_owner=is_owner,
+                                ).pack(),
+                            )
+                        ]
                     ]
-                ]
-            )
+                )
 
-            formatted_dt = format_dt(dt)
+                formatted_dt = format_dt(dt)
 
-            await message.answer(
-                f"📅 <b>Запись {count}</b>\n\n"
-                f"👤 {name}\n"
-                f"🕒 {formatted_dt}\n"
-                f"✂️ {service_name}\n"
-                f"📍 {address}\n",
-                reply_markup=keyboard,
-                parse_mode="HTML",
-            )
-            count += 1
+                msg = ""
+                if username != "":
+                    msg = (
+                        f"<b>Запись {count}</b>\n\n"
+                        f"👤 <i>Клиент</i>: {name}\n"
+                        f"📞 <i>Телефон</i>: {phone}\n"
+                        f"🗓 <i>Дата и время</i>: {formatted_dt}\n"
+                        f"✂️ <i>Услуга</i>: {service_name}\n"
+                        f"📍 <i>Адрес</i>: {address}\n"
+                        f"💬 <i>Telegram</i>: @{username}"
+                    )
+                else:
+                    msg = (
+                        f"<b>Запись {count}</b>\n\n"
+                        f"👤 <i>Клиент</i>: {name}\n"
+                        f"📞 <i>Телефон</i>: {phone}\n"
+                        f"🗓 <i>Дата и время</i>: {formatted_dt}\n"
+                        f"✂️ <i>Услуга</i>: {service_name}\n"
+                        f"📍 <i>Адрес</i>: {address}\n"
+                        f"💬 <i>Telegram</i>: юзернейм отсутствует"
+                    )
+
+                await message.answer(
+                    msg,
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+                count += 1
+        else:
+            for record_id, dt, name, service_name, address in records:
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="❌ Отменить",
+                                callback_data=CancelCallback(
+                                    record_id=record_id,
+                                    is_owner=is_owner,
+                                ).pack(),
+                            )
+                        ]
+                    ]
+                )
+
+                formatted_dt = format_dt(dt)
+
+                await message.answer(
+                    f"📅 <b>Запись {count}</b>\n\n"
+                    f"👤 {name}\n"
+                    f"🕒 {formatted_dt}\n"
+                    f"✂️ {service_name}\n"
+                    f"📍 {address}\n",
+                    reply_markup=keyboard,
+                    parse_mode="HTML",
+                )
+                count += 1
 
         logger.info(f"Пользователь {user_id} вывел список своих записей")
 

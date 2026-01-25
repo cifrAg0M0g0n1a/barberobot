@@ -33,6 +33,8 @@ async def handle_cancel_callback(
 
     processing_records.add(callback_data.record_id)
     record_id = callback_data.record_id
+    is_owner = callback_data.record_id
+
     try:
         res = await backend_get(f"{getRecordById}/{record_id}")
         row = res.json()
@@ -66,12 +68,23 @@ async def handle_cancel_callback(
 
     processing_records.remove(callback_data.record_id)
 
-    try:
-        await bot.send_message(
-            OWNER_ID,
-            f"💭 Клиент {user_record_name} отменил запись на {formatted_dt} по адресу: {address}\nУслуга: {service_name}\nТГ: @{username}",
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при уведомлении мастера: {e}")
+    if is_owner:
+        try:
+            await bot.send_message(
+                user_id,
+                f"💭 Мастер отменил Вашу запись на {formatted_dt} по адресу: {address}. Для уточнения причины Вы можете связаться с мастером, получив контакты по команде /contact",
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при уведомлении пользователя об отмене мастером: {e}")
 
-    logger.info(f"Пользователь {user_id} отменил запись {record_id} на {dt}")
+        logger.info(f"Мастер отменил запись {record_id} пользователя {user_id} на {dt}")
+    else:
+        try:
+            await bot.send_message(
+                OWNER_ID,
+                f"💭 Клиент {user_record_name} отменил запись на {formatted_dt} по адресу: {address}\nУслуга: {service_name}\nТГ: @{username}",
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при уведомлении мастера: {e}")
+
+        logger.info(f"Пользователь {user_id} отменил запись {record_id} на {dt}")

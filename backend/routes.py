@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from backend.helpers.reminder import schedule_one_reminder
 from database.database import (
     delete_record,
+    get_all_records,
     get_record,
     get_slots_for_date,
     get_service,
@@ -174,7 +175,7 @@ async def add_record(request: Request):
 
     msg = ""
 
-    if username:
+    if username != "":
         msg = (
             f"<b>Новая запись!</b>\n\n"
             f"👤 <i>Клиент</i>: {name}\n"
@@ -255,7 +256,7 @@ async def create_user(payload: dict):
 
 
 @router.get("/get-user/{user_id}")
-async def create_user(user_id: int):
+async def get_user_data(user_id: int):
     logger.info(f"Запрос юзера c айди {user_id}...")
 
     user = get_user(user_id)
@@ -273,6 +274,15 @@ async def get_user_records_api(user_id: int):
     return records
 
 
+@router.get("/get-all-records/{user_id}")
+async def get_all_records_api(user_id: int):
+    logger.info(f"Запрос всех записей юзером {user_id}...")
+    records = get_all_records()
+
+    logger.info(f"Все записи юзером {user_id} успешно получены: {records}")
+    return records
+
+
 @router.get("/get-record/{record_id}")
 async def get_record_by_id(record_id: int):
     logger.info(f"Запрос записи с айди {record_id}...")
@@ -283,7 +293,7 @@ async def get_record_by_id(record_id: int):
 
 
 @router.delete("/delete-record/{record_id}")
-async def get_record_by_id(record_id: int):
+async def delete_record_by_id(record_id: int):
     logger.info(f"Удаление записи с айди {record_id}...")
     delete_record(record_id)
 
