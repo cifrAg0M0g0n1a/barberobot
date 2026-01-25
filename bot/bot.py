@@ -109,7 +109,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
             return
 
         if not records:
-            await message.answer("У вас нет активных записей")
+            await message.answer("У Вас нет активных записей")
             logger.info(f"У пользователя {user_id} нет активных записей")
             return
 
@@ -127,7 +127,6 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
             )
 
             formatted_dt = format_dt(dt)
-            address = ADDRESS
 
             await message.answer(
                 f"📅 <b>Запись {count}</b>\n\n"
@@ -164,7 +163,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     @dp.message()
     async def all_messages(message: Message):
         reply_text = (
-            "Извините, я вас не понимаю 😥\n\n"
+            "Извините, я Вас не понимаю 😥\n\n"
             "Вы можете ввести «/» в текстовое поле для просмотра всех доступных команд ☺️"
         )
 

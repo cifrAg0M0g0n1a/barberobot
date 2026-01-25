@@ -101,6 +101,20 @@ async function addRecord() {
         return;
     }
 
+    let price = null;
+
+    try {
+        const serviceRes = await fetch("/service");
+        const service = await serviceRes.json();
+        price = service.price;
+    } catch (e) {
+        console.error("Ошибка загрузки конфигурации:", e);
+        if (serviceNameEl) serviceNameEl.textContent = "Ошибка";
+        if (servicePriceEl) servicePriceEl.textContent = "Ошибка";
+        if (addressEl) addressEl.textContent = "Ошибка";
+        price = -1;
+    }
+
     const data = {
         date: dateInput.value,
         time: selectedTime,
@@ -109,6 +123,7 @@ async function addRecord() {
         userId: userId,
         username: username,
         address: address,
+        price: price,
     };
 
     if (!phoneInput.value.match(/^\+7 \(\d{3}\) \d{3} \d{2}-\d{2}$/)) {
@@ -128,16 +143,16 @@ async function addRecord() {
             throw new Error(result.detail || "Ошибка при записи");
         }
 
-        // dateInput.value = "";
-        // nameInput.value = "";
-        // phoneInput.value = "";
-        // selectedTime = null;
+        dateInput.value = "";
+        nameInput.value = "";
+        phoneInput.value = "";
+        selectedTime = null;
 
-        // timeSlotsContainer.innerHTML = `
-        //     <div class="time-placeholder">
-        //         Выберите дату
-        //     </div>
-        // `;
+        timeSlotsContainer.innerHTML = `
+            <div class="time-placeholder">
+                Выберите дату
+            </div>
+        `;
 
         statusEl.textContent = result.message || "Запись успешно добавлена!";
         statusEl.style.color = "#28a745";

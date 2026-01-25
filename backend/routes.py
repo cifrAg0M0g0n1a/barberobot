@@ -1,3 +1,4 @@
+from sched import scheduler
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -5,6 +6,7 @@ from fastapi import (
 )
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from backend.helpers.reminder import schedule_one_reminder
 from database.database import (
     delete_record,
     get_record,
@@ -108,6 +110,7 @@ async def add_record(request: Request):
     userId = payload.get("userId")
     username = payload.get("username")
     address = payload.get("address")
+    price = payload.get("price")
 
     logger.info("Старт записи...")
 
@@ -146,7 +149,7 @@ async def add_record(request: Request):
         )
 
     logger.info(f"Запрос добавления записи для юзера {userId}...")
-    add_record_cut(
+    recordId = add_record_cut(
         user_id=userId,
         datetime_obj=datetime.combine(date_obj, time_obj),
         service_id=service["id"],
@@ -156,6 +159,17 @@ async def add_record(request: Request):
     )
     logger.info(
         f"Отправленные поля: user_id={userId}, datetime={datetime.combine(date_obj, time_obj)}, service_id={service["id"]}, name={name}, phone={phone}, address={address}"
+    )
+
+    await schedule_one_reminder(
+        bot=bot,
+        record_id=recordId,
+        user_id=userId,
+        dt_str=f"{date_str} {time_str}",
+        name=name,
+        service=service,
+        price=price,
+        address=address,
     )
 
     msg = ""

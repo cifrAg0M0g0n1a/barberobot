@@ -1,11 +1,11 @@
 import logging
-from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 import sys
 from pathlib import Path
 
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+if str(Path(__file__).parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import uvicorn
 from database.database import create_tables, seed_services
@@ -20,6 +20,7 @@ from backend.utils.logger import get_logger
 from backend.helpers.log_cleanup_task import start_log_cleanup
 from aiogram import Bot
 from config import BOT_TOKEN
+from helpers.reminder import scheduler, schedule_reminders
 
 
 logger = get_logger(__name__)
@@ -39,10 +40,16 @@ async def lifespan(app: FastAPI):
     create_tables()
     seed_services()
 
+    bot = Bot(token=BOT_TOKEN)
+    scheduler.start()
+    await schedule_reminders(bot)
+
     start_log_cleanup(bot)
 
     yield
     logger.info("Shutdown")
+    scheduler.shutdown(wait=False)
+    await bot.session.close()
 
 
 app = FastAPI(

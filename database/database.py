@@ -119,8 +119,13 @@ def add_record_cut(
         """,
         (user_id, datetime_obj.isoformat(sep=" "), service_id, name, phone, address),
     )
+
+    record_id = cursor.lastrowid
+
     conn.commit()
     conn.close()
+
+    return record_id
 
 
 def get_user(user_id: int):
@@ -133,6 +138,34 @@ def get_user(user_id: int):
     row = cursor.fetchone()
     conn.close()
     return row
+
+
+def get_user_records_for_reminder():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT r.id, r.user_id, r.datetime, r.name, s.name AS service_name, s.price, r.address
+        FROM records r
+        JOIN services s ON r.service_id = s.id
+        WHERE r.reminder_sent = 0
+        """
+    )
+
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def mark_reminder_sent(record_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("UPDATE records SET reminder_sent = 1 WHERE id = ?", (record_id,))
+
+    conn.commit()
+    conn.close()
 
 
 # ---------- Прочие функции, при необходимости ----------
@@ -170,6 +203,7 @@ def create_tables():
         phone TEXT NOT NULL,
         name TEXT NOT NULL,
         address TEXT NOT NULL,
+        reminder_sent INTEGER NOT NULL DEFAULT(0),
         created_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (service_id) REFERENCES services(id)
