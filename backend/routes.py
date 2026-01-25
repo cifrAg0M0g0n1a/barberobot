@@ -209,6 +209,25 @@ async def add_record(request: Request):
             f"Ошибка при отправки записи мастеру для пользователя: {userId}. Ошибка: {e}"
         )
 
+    try:
+        logger.info(f"Отправка записи пользователю: {userId} {name} {username}...")
+        asyncio.create_task(
+            bot.send_message(
+                userId,
+                (
+                    f"<b>Вы успешно записались на стрижку! За два часа до выбранного времени я пришлю уведомление 😉</b>\n\n"
+                    f"🗓 <i>Дата и время</i>: {format_dt(f"{date_str} {time_str}")}\n"
+                    f"✂️ <i>Услуга</i>: {service['name']}\n"
+                    f"📍 <i>Адрес</i>: {address}\n"
+                ),
+                parse_mode="HTML",
+            )
+        )
+    except Exception as e:
+        logger.error(
+            f"Ошибка при отправки записи пользователю: {userId} {name} {username}. Ошибка: {e}"
+        )
+
     logger.info("Запись успешно добалена")
     return {"message": "Запись успешно добавлена!"}
 
