@@ -17,8 +17,20 @@ from database.database import (
     add_user_if_not_exists,
     get_user_records,
     get_user,
+    has_user_spin,
+    save_spin,
+    get_promo_code,
+    use_promo_code,
 )
-from settings import WORK_START, WORK_END, TIMEZONE, SERVICE_DURATION_MIN
+from settings import (
+    WORK_START,
+    WORK_END,
+    TIMEZONE,
+    SERVICE_DURATION_MIN,
+    DISCOUNT30,
+    FREEFRIEND,
+    FREESELF,
+)
 from datetime import date, datetime, timedelta
 from config import ADDRESS
 from pathlib import Path
@@ -112,8 +124,43 @@ async def add_record(request: Request):
     username = payload.get("username")
     address = payload.get("address")
     price = payload.get("price")
+    promo_code = payload.get("promo_code")
 
     logger.info("Старт записи...")
+
+    promo_info = None
+    final_price = price
+    if promo_code:
+        promo_info = get_promo_code(promo_code)
+        if not promo_info:
+            raise HTTPException(status_code=400, detail="Промокод не найден")
+
+        (
+            promo_id,
+            _,
+            prize_type,
+            discount_percent,
+            owner_user_id,
+            allow_owner,
+            used,
+            _,
+            _,
+        ) = promo_info
+
+        if used:
+            raise HTTPException(status_code=400, detail="Промокод уже использован")
+
+        if userId == owner_user_id and allow_owner == 0:
+            raise HTTPException(
+                status_code=400, detail="Вы не можете использовать этот промокод"
+            )
+
+        if prize_type == FREESELF:
+            final_price = 0
+        elif prize_type == FREEFRIEND:
+            final_price = 0
+        elif prize_type == DISCOUNT30 and discount_percent:
+            final_price = int(price * (1 - discount_percent / 100))
 
     if not all([name, phone, date_str, time_str, userId]):
         logger.error("Утерянные поля")
@@ -126,9 +173,10 @@ async def add_record(request: Request):
         logger.error("Неверный формат даты или времени")
         raise HTTPException(status_code=400, detail="Неверный формат даты или времени")
 
-    if date_obj <= date.today():
+    if date_obj < date.today():
+        logger.error("Нельзя записаться на прошедшую дату")
         raise HTTPException(
-            status_code=400, detail="Нельзя записаться на прошедшую или текущую дату"
+            status_code=400, detail="Нельзя записаться на прошедшую дату"
         )
 
     logger.info("Запрос услуги...")
@@ -162,6 +210,17 @@ async def add_record(request: Request):
         f"Отправленные поля: user_id={userId}, datetime={datetime.combine(date_obj, time_obj)}, service_id={service["id"]}, name={name}, phone={phone}, address={address}"
     )
 
+    if promo_code and promo_info:
+        promo_used = use_promo_code(promo_code, userId)
+        if not promo_used:
+            logger.warning(
+                f"Не удалось использовать промокод {promo_code} для пользователя {userId}"
+            )
+        else:
+            logger.info(
+                f"Промокод {promo_code} успешно использован пользователем {userId}"
+            )
+
     await schedule_one_reminder(
         bot=bot,
         record_id=recordId,
@@ -169,11 +228,21 @@ async def add_record(request: Request):
         dt_str=f"{date_str} {time_str}",
         name=name,
         service=service,
-        price=price,
+        price=final_price,
         address=address,
     )
 
     msg = ""
+
+    promo_text = ""
+    if promo_code and promo_info:
+        _, _, prize_type, _, _, _, _, _, _ = promo_info
+        if prize_type == FREESELF:
+            promo_text = "\n🎫 <i>Промокод</i>: Бесплатная стрижка"
+        elif prize_type == FREEFRIEND:
+            promo_text = "\n🎫 <i>Промокод</i>: Бесплатная стрижка другу"
+        elif prize_type == DISCOUNT30:
+            promo_text = f"\n🎫 <i>Промокод</i>: Скидка 30% (цена: {final_price} ₽)"
 
     if username != "":
         msg = (
@@ -183,7 +252,9 @@ async def add_record(request: Request):
             f"🗓 <i>Дата и время</i>: {format_dt(f"{date_str} {time_str}")}\n"
             f"✂️ <i>Услуга</i>: {service['name']}\n"
             f"📍 <i>Адрес</i>: {address}\n"
+            f"💸 <i>Итоговая цена</i>: {final_price} ₽\n"
             f"💬 <i>Telegram</i>: @{username}"
+            f"{promo_text}"
         )
     else:
         msg = (
@@ -193,11 +264,15 @@ async def add_record(request: Request):
             f"🗓 <i>Дата и время</i>: {format_dt(f"{date_str} {time_str}")}\n"
             f"✂️ <i>Услуга</i>: {service['name']}\n"
             f"📍 <i>Адрес</i>: {address}\n"
+            f"💸 <i>Итоговая цена</i>: {final_price} ₽\n"
             f"💬 <i>Telegram</i>: юзернейм отсутствует"
+            f"{promo_text}"
         )
 
     try:
-        logger.info(f"Отправка записи мастеру для пользователя: {userId}...")
+        logger.info(
+            f"Отправка записи мастеру для пользователя: {userId} {name} {username}..."
+        )
         asyncio.create_task(
             bot.send_message(
                 OWNER_ID,
@@ -207,11 +282,23 @@ async def add_record(request: Request):
         )
     except Exception as e:
         logger.error(
-            f"Ошибка при отправки записи мастеру для пользователя: {userId}. Ошибка: {e}"
+            f"Ошибка при отправки записи мастеру для пользователя: {userId} {name} {username}. Ошибка: {e}"
         )
 
     try:
         logger.info(f"Отправка записи пользователю: {userId} {name} {username}...")
+        promo_user_text = ""
+        if promo_code and promo_info:
+            _, _, prize_type, _, _, _, _, _, _ = promo_info
+            if prize_type == FREESELF:
+                promo_user_text = "\n🎁 <b>Бесплатная стрижка по промокоду!</b>"
+            elif prize_type == FREEFRIEND:
+                promo_user_text = "\n🎁 <b>Бесплатная стрижка по промокоду!</b>"
+            elif prize_type == DISCOUNT30:
+                promo_user_text = (
+                    f"\n💸 <b>Применена скидка 30%!</b> Итоговая цена: {final_price} ₽"
+                )
+
         asyncio.create_task(
             bot.send_message(
                 userId,
@@ -220,6 +307,7 @@ async def add_record(request: Request):
                     f"🗓 <i>Дата и время</i>: {format_dt(f"{date_str} {time_str}")}\n"
                     f"✂️ <i>Услуга</i>: {service['name']}\n"
                     f"📍 <i>Адрес</i>: {address}\n"
+                    f"{promo_user_text}"
                 ),
                 parse_mode="HTML",
             )
@@ -299,3 +387,28 @@ async def delete_record_by_id(record_id: int):
 
     logger.info(f"Запись с айди {record_id} успешна удалена")
     return {"status": "ok"}
+
+
+@router.get("/wheel/check/{user_id}")
+async def check_spin(user_id: int):
+    has_spin = has_user_spin(user_id)
+    return {"has_spin": has_spin}
+
+
+@router.post("/wheel/{user_id}")
+async def spin_wheel(user_id: int, payload: dict):
+    if has_user_spin(user_id):
+        raise HTTPException(status_code=400, detail="Вы уже крутили колесо")
+
+    prize_type = payload.get("prize_type")
+    promo_code = payload.get("promo_code")
+
+    if not prize_type:
+        raise HTTPException(status_code=400, detail="Missing prize_type")
+
+    save_spin(user_id, prize_type, promo_code)
+
+    logger.info(
+        f"Пользователь {user_id} выиграл приз {prize_type}, промокод: {promo_code}"
+    )
+    return {"status": "ok", "prize_type": prize_type, "promo_code": promo_code}

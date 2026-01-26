@@ -1,5 +1,9 @@
+import random
 import sys
 from pathlib import Path
+
+from backend.utils.generate_promo import generate_promo_code
+from settings import DISCOUNT30, FREEFRIEND, FREESELF, LOSE
 
 if str(Path(__file__).parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -11,8 +15,9 @@ from aiogram.filters.callback_data import (
 )
 from config import OWNER_ID
 from utils.format_datetime import format_dt
-from bot.constants.endpoints import deleteRecord, getRecordById
-from helpers.http import backend_get, backend_delete
+from bot.constants.endpoints import deleteRecord, getRecordById, spinWheel
+from bot.wheel import choose_prize
+from helpers.http import backend_get, backend_delete, backend_post
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +27,10 @@ processing_records = set()
 
 class CancelCallback(CallbackData, prefix="cancel"):
     record_id: int
+
+
+class SpinCallback(CallbackData, prefix="spin"):
+    action: str
 
 
 async def handle_cancel_callback(
@@ -88,3 +97,91 @@ async def handle_cancel_callback(
             logger.error(f"Ошибка при уведомлении мастера: {e}")
 
         logger.info(f"Пользователь {user_id} отменил запись {record_id} на {dt}")
+
+
+async def handle_spin_callback(bot, query: CallbackQuery, callback_data: SpinCallback):
+    user_id = query.from_user.id
+
+    if user_id in processing_records:
+        await query.answer("Уже обрабатывается… ⏳")
+        return
+
+    processing_records.add(user_id)
+
+    try:
+        res = await backend_get(f"{spinWheel}/check/{user_id}")
+        res.raise_for_status()
+        data = res.json()
+        if data.get("has_spin", False):
+            await query.answer("Вы уже крутили колесо 😉", show_alert=True)
+            processing_records.remove(user_id)
+            return
+    except Exception as e:
+        logger.error(
+            f"При попытке пользователем {user_id} проверить, не использован ли спин повторно, произошла ошибка: {e}"
+        )
+        await query.message.edit_text(
+            "😬 Произошла ошибка, попробуйте позже", parse_mode="HTML"
+        )
+        processing_records.remove(user_id)
+        return
+
+    prize_key = choose_prize()
+
+    promo_code = None
+    text = ""
+
+    if prize_key == LOSE:
+        text = "😔 Увы, в этот раз без приза"
+    else:
+        promo_code = generate_promo_code(prize_key)
+
+        if prize_key == DISCOUNT30:
+            text = (
+                "🎉 <b>Поздравляем!</b>\n\n"
+                "Вы выиграли <b>скидку 30%</b> ✂️\n\n"
+                f"🎫 <b>Промокод:</b> <code>{promo_code}</code>\n"
+                "Используйте его при записи"
+            )
+
+        elif prize_key == FREEFRIEND:
+            text = (
+                "🎉 <b>Поздравляем!</b>\n\n"
+                "🎁 <b>Бесплатная стрижка для друга</b>\n\n"
+                f"🎫 <b>Промокод:</b> <code>{promo_code}</code>\n"
+                "⚠️ Вы не можете использовать его сами"
+            )
+
+        elif prize_key == FREESELF:
+            text = (
+                "👑 <b>ДЖЕКПОТ!</b>\n\n"
+                "✂️ <b>Бесплатная стрижка для вас</b>\n\n"
+                f"🎫 <b>Промокод:</b> <code>{promo_code}</code>\n"
+                "Используйте его при записи"
+            )
+        else:
+            text = "Что-то пошло не так 😅\nПожалуйста, попробуйте позже"
+
+    try:
+        res = await backend_post(
+            f"{spinWheel}/{user_id}",
+            {
+                "prize_type": prize_key,
+                "promo_code": promo_code,
+            },
+        )
+        res.raise_for_status()
+    except Exception as e:
+        logger.error(
+            f"При сохранении результата спина у пользователя {user_id} произошла ошибка: {e}"
+        )
+        await query.message.edit_text(
+            "😬 Произошла ошибка при сохранении результата, попробуйте позже",
+            parse_mode="HTML",
+        )
+        processing_records.remove(user_id)
+        return
+
+    processing_records.remove(user_id)
+    await query.message.edit_text(text, parse_mode="HTML")
+    await query.answer()

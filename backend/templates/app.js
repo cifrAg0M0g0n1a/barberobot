@@ -1,5 +1,5 @@
 let dateInput, timeSlotsContainer, serviceNameEl, servicePriceEl, addressEl;
-let nameInput, phoneInput, bookBtn, statusEl;
+let nameInput, phoneInput, bookBtn, statusEl, promoCodeInput;
 let selectedTime = null;
 let userId = null;
 let username = null;
@@ -126,6 +126,10 @@ async function addRecord() {
         price: price,
     };
 
+    if (promoCodeInput && promoCodeInput.value.trim()) {
+        data.promo_code = promoCodeInput.value.trim();
+    }
+
     if (!phoneInput.value.match(/^\+7 \(\d{3}\) \d{3} \d{2}-\d{2}$/)) {
         statusEl.textContent = "Введите номер в формате +7 (000) 000 00-00";
         statusEl.style.color = "#dc3545";
@@ -146,6 +150,7 @@ async function addRecord() {
         dateInput.value = "";
         nameInput.value = "";
         phoneInput.value = "";
+        if (promoCodeInput) promoCodeInput.value = "";
         selectedTime = null;
 
         timeSlotsContainer.innerHTML = `
@@ -158,8 +163,13 @@ async function addRecord() {
         statusEl.style.color = "#28a745";
     } catch (e) {
         console.error("Ошибка при записи:", e);
-        statusEl.textContent = e.message || "При записи произошла ошибка. Повторите позже";
+        const errorMessage = e.message || "При записи произошла ошибка. Повторите позже";
+        statusEl.textContent = errorMessage;
         statusEl.style.color = "#dc3545";
+
+        if (errorMessage.includes("промокод") && promoCodeInput) {
+            promoCodeInput.value = "";
+        }
     }
 }
 
@@ -199,11 +209,12 @@ document.addEventListener("DOMContentLoaded", () => {
     addressEl = document.getElementById("address");
     nameInput = document.getElementById("userName");
     phoneInput = document.getElementById("userPhone");
+    promoCodeInput = document.getElementById("promoCode");
     bookBtn = document.getElementById("submitBtn");
     statusEl = document.getElementById("status");
 
     if (!dateInput || !timeSlotsContainer || !serviceNameEl || !servicePriceEl ||
-        !addressEl || !nameInput || !phoneInput || !bookBtn || !statusEl) {
+        !addressEl || !nameInput || !phoneInput || !bookBtn || !statusEl || !promoCodeInput) {
         console.error("Не все элементы найдены на странице");
         console.error("dateInput:", dateInput, "timeSlotsContainer:", timeSlotsContainer);
         document.body.innerHTML = `
@@ -234,7 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     const today = new Date();
-    today.setDate(today.getDate() + 1);
+    today.setDate(today.getDate());
     dateInput.min = today.toISOString().split("T")[0];
 
     const maskOptions = {

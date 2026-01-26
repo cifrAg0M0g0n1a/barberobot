@@ -22,8 +22,13 @@ from bot.constants.endpoints import (
     getAllRecords,
 )
 from helpers.http import backend_post, backend_get
-from callbacks import CancelCallback, handle_cancel_callback
-from config import BOT_TOKEN, ADDRESS, CONTACT, OWNER_ID
+from callbacks import (
+    CancelCallback,
+    SpinCallback,
+    handle_cancel_callback,
+    handle_spin_callback,
+)
+from config import BOT_TOKEN, CONTACT, OWNER_ID
 import logging
 from utils.format_datetime import format_dt
 
@@ -61,6 +66,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
             "• 📅 Записаться на удобное время, нажав на кнопку «Записаться» слева от текстового поля\n"
             "• 👀 Просмотреть или отменить свои записи - /show\n"
             "• 📞 Получить контакт мастера - /contact\n\n"
+            "• 🎡 Прокрутить колесо фортуны - /spin\n\n"
             "Начнём? Просто используйте команды выше или введите «/» в текстовое поле для просмотра всех доступных команд 😉",
             parse_mode="HTML",
         )
@@ -219,6 +225,43 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
         logger.info(
             f"Пользователь {message.from_user.id} отправил: {message.text} | Бот ответил: {reply_text}"
         )
+
+    @dp.message(Command(commands="spin"))
+    async def spin_handler(message: Message):
+        user_id = message.from_user.id
+        logger.info(f"Пользователь {user_id} ввел /spin")
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🎡 Крутануть",
+                        callback_data=SpinCallback(action="start").pack(),
+                    )
+                ]
+            ]
+        )
+
+        text = (
+            "🎡 <b>Колесо фортуны</b>\n\n"
+            "Вы можете испытать удачу <b>ТОЛЬКО ОДИН РАЗ</b>\n\n"
+            "<b>Возможные призы:</b>\n"
+            "❌ Ничего\n"
+            "💸 Скидка <b>30%</b>\n"
+            "🎁 Бесплатная стрижка <i>другу</i>\n"
+            "👑 Бесплатная стрижка <i>для вас</i>\n\n"
+            "Нажмите кнопку ниже, чтобы крутануть колесо 👇"
+        )
+
+        await message.answer(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+
+    @dp.callback_query(SpinCallback.filter())
+    async def spin_callback(query, callback_data: SpinCallback):
+        await handle_spin_callback(bot, query, callback_data)
 
     # Default
     @dp.message()

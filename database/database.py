@@ -3,6 +3,8 @@ import sqlite3
 from typing import List, Optional, Tuple
 from pathlib import Path
 
+from settings import DISCOUNT30, FREEFRIEND, LOSE
+
 DB_PATH = str(Path(__file__).parent.parent / "database" / "db.sqlite3")
 
 
@@ -192,6 +194,118 @@ def mark_reminder_sent(record_id: int):
     conn.close()
 
 
+def has_user_spin(user_id: int) -> bool:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT 1 FROM wheel_spins WHERE user_id = ? LIMIT 1",
+        (user_id,),
+    )
+    result = cursor.fetchone()
+
+    conn.close()
+    return bool(result)
+
+
+def save_spin(
+    user_id: int,
+    prize_type: str,
+    promo_code: Optional[str],
+) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO wheel_spins (user_id, prize_type, created_at)
+        VALUES (?, ?, datetime('now'))
+        """,
+        (user_id, prize_type),
+    )
+
+    if promo_code:
+        allow_owner = 1 if prize_type != FREEFRIEND else 0
+        discount_percent = 30 if prize_type == DISCOUNT30 else None
+
+        cursor.execute(
+            """
+            INSERT INTO promo_codes
+                (code, prize_type, discount_percent, owner_user_id, allow_owner, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            """,
+            (promo_code, prize_type, discount_percent, user_id, allow_owner),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def get_promo_code(code: str) -> Optional[Tuple]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id, code, prize_type, discount_percent, owner_user_id, allow_owner, used, used_by, used_at
+        FROM promo_codes
+        WHERE code = ?
+        """,
+        (code,),
+    )
+    result = cursor.fetchone()
+
+    conn.close()
+    return result
+
+
+def use_promo_code(code: str, user_id: int) -> bool:
+    """
+    Использует промокод для пользователя.
+    Возвращает True, если промокод успешно использован, False в противном случае.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    promo = get_promo_code(code)
+    if not promo:
+        conn.close()
+        return False
+
+    (
+        promo_id,
+        _,
+        prize_type,
+        discount_percent,
+        owner_user_id,
+        allow_owner,
+        used,
+        _,
+        _,
+    ) = promo
+
+    if used:
+        conn.close()
+        return False
+
+    if user_id == owner_user_id and allow_owner == 0:
+        conn.close()
+        return False
+
+    cursor.execute(
+        """
+        UPDATE promo_codes
+        SET used = 1, used_by = ?, used_at = datetime('now')
+        WHERE id = ?
+        """,
+        (user_id, promo_id),
+    )
+
+    conn.commit()
+    conn.close()
+    return True
+
+
 # ---------- Прочие функции, при необходимости ----------
 def create_tables():
     conn = sqlite3.connect(DB_PATH)
@@ -232,6 +346,39 @@ def create_tables():
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (service_id) REFERENCES services(id)
     )
+    """
+    )
+
+    cursor.execute(
+        """
+    CREATE TABLE IF NOT EXISTS promo_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+
+        prize_type TEXT NOT NULL, 
+
+        discount_percent INTEGER,
+
+        owner_user_id INTEGER NOT NULL,
+        allow_owner INTEGER NOT NULL,
+
+        used INTEGER NOT NULL DEFAULT 0,
+        used_by INTEGER,
+        used_at TEXT,
+
+        created_at TEXT NOT NULL
+    )
+    """
+    )
+
+    cursor.execute(
+        """
+    CREATE TABLE IF NOT EXISTS wheel_spins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        prize_type TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
     """
     )
 
