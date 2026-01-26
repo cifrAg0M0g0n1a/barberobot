@@ -22,6 +22,7 @@ from backend.helpers.backup_task import start_backup_task
 from aiogram import Bot
 from config import BOT_TOKEN
 from helpers.reminder import scheduler, schedule_reminders
+from database.backup import backup_db, send_backup_to_telegram
 
 
 logger = get_logger(__name__)
@@ -30,23 +31,24 @@ formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
 logger.info("Backend logger initialized")
 
-bot = Bot(token=BOT_TOKEN)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Startup: backup and initialize DB")
 
-    backup_db()
+    bot = Bot(token=BOT_TOKEN)
+
+    backup_path, timestamp = backup_db()
+    await send_backup_to_telegram(bot, backup_path, timestamp)
+
     create_tables()
     seed_services()
 
-    bot = Bot(token=BOT_TOKEN)
     scheduler.start()
     await schedule_reminders(bot)
 
     start_log_cleanup(bot)
-    start_backup_task()
+    start_backup_task(bot)
 
     yield
     logger.info("Shutdown")

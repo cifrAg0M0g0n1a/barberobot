@@ -81,6 +81,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
         logger.info(f"Пользователь {user_id} ввел /show")
 
         logger.info(f"Пользователь {user_id} запросил данные пользователя")
+        user = None
         try:
             res = await backend_get(f"{getUser}/{user_id}")
             user = res.json()
