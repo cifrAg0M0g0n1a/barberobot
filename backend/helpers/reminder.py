@@ -57,27 +57,38 @@ async def schedule_reminders(bot: Bot):
     try:
         records = get_user_records_for_reminder()
     except Exception as e:
-        logger.info(f"Не удалось запросить записи дял напоминания юзеру. Ошибка: {e}")
+        logger.error(f"Не удалось запросить записи для напоминания. Ошибка: {e}")
         return
 
-    now = datetime.now()
+    now = datetime.now(TIMEZONE)
 
     for record_id, user_id, dt_str, name, service, price, address in records:
-        record_dt = datetime.fromisoformat(dt_str)
-        reminder_time = record_dt - timedelta(hours=2)
+        try:
+            if len(dt_str) == 16:  # "YYYY-MM-DD HH:MM"
+                dt_str = dt_str + ":00"
 
-        if reminder_time <= now:
-            continue
+            record_dt = datetime.fromisoformat(dt_str)
+            if record_dt.tzinfo is None:
+                record_dt = record_dt.replace(tzinfo=TIMEZONE)
 
-        trigger = DateTrigger(run_date=reminder_time)
-        scheduler.add_job(
-            send_reminder,
-            trigger=trigger,
-            args=(bot, user_id, record_id, dt_str, name, service, price, address),
-            id=f"reminder_{record_id}",
-            replace_existing=True,
-        )
-        logger.info(f"Напоминание для {user_id} записано на {reminder_time}")
+            reminder_time = record_dt - timedelta(hours=2)
+
+            if reminder_time <= now:
+                continue
+
+            trigger = DateTrigger(run_date=reminder_time)
+            scheduler.add_job(
+                send_reminder,
+                trigger=trigger,
+                args=(bot, user_id, record_id, dt_str, name, service, price, address),
+                id=f"reminder_{record_id}",
+                replace_existing=True,
+            )
+            logger.info(f"Напоминание для {user_id} записано на {reminder_time}")
+        except Exception as e:
+            logger.error(
+                f"Ошибка при планировании напоминания для записи {record_id}: {e}"
+            )
 
 
 async def schedule_one_reminder(
@@ -90,20 +101,34 @@ async def schedule_one_reminder(
     price: int,
     address: str,
 ):
-    record_dt = datetime.fromisoformat(dt_str)
-    reminder_time = record_dt - timedelta(hours=2)
+    try:
+        if len(dt_str) == 16:  # "YYYY-MM-DD HH:MM"
+            dt_str = dt_str + ":00"
 
-    if reminder_time <= datetime.now():
-        return
+        record_dt = datetime.fromisoformat(dt_str)
+        if record_dt.tzinfo is None:
+            record_dt = record_dt.replace(tzinfo=TIMEZONE)
 
-    scheduler.add_job(
-        send_reminder,
-        trigger=DateTrigger(run_date=reminder_time),
-        args=(bot, user_id, record_id, dt_str, name, service, price, address),
-        id=f"reminder_{record_id}",
-        replace_existing=True,
-    )
+        reminder_time = record_dt - timedelta(hours=2)
+        now = datetime.now(TIMEZONE)
 
-    logger.info(
-        f"[REMINDER] Запланировано для user={user_id}, record={record_id} на {reminder_time}"
-    )
+        if reminder_time <= now:
+            logger.warning(
+                f"Напоминание для записи {record_id} не может быть запланировано: "
+                f"время напоминания ({reminder_time}) уже прошло"
+            )
+            return
+
+        scheduler.add_job(
+            send_reminder,
+            trigger=DateTrigger(run_date=reminder_time),
+            args=(bot, user_id, record_id, dt_str, name, service, price, address),
+            id=f"reminder_{record_id}",
+            replace_existing=True,
+        )
+
+        logger.info(
+            f"[REMINDER] Запланировано для user={user_id}, record={record_id} на {reminder_time}"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при планировании напоминания для записи {record_id}: {e}")

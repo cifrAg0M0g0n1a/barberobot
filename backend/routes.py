@@ -227,7 +227,7 @@ async def add_record(request: Request):
         user_id=userId,
         dt_str=f"{date_str} {time_str}",
         name=name,
-        service=service,
+        service=service["name"],
         price=final_price,
         address=address,
     )
