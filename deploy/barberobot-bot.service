@@ -1,0 +1,31 @@
+[Unit]
+Description=Barberobot Telegram Bot Service
+After=network.target barberobot-backend.service
+Requires=barberobot-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/barberobot
+Environment="PATH=/opt/barberobot/venv/bin"
+EnvironmentFile=/opt/barberobot/.env
+ExecStartPre=/opt/barberobot/deploy/check_backend.sh
+ExecStart=/opt/barberobot/venv/bin/python -m bot.main
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=barberobot-bot
+
+# Ограничения ресурсов
+LimitNOFILE=65536
+MemoryMax=256M
+
+# Безопасность
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
