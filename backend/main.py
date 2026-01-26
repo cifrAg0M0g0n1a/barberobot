@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from routes import router
 from backend.utils.logger import get_logger
 from backend.helpers.log_cleanup_task import start_log_cleanup
+from backend.helpers.backup_task import start_backup_task
 from aiogram import Bot
 from config import BOT_TOKEN
 from helpers.reminder import scheduler, schedule_reminders
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
     await schedule_reminders(bot)
 
     start_log_cleanup(bot)
+    start_backup_task()
 
     yield
     logger.info("Shutdown")
