@@ -9,7 +9,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from aiogram import Bot
 from bot.bot import setup_bot
-from helpers.cleanup_old_logs import send_and_cleanup_old_logs
+from bot.helpers.cleanup_old_logs import send_and_cleanup_old_logs
 
 
 logger = logging.getLogger()

@@ -17,7 +17,7 @@ from config import OWNER_ID
 from utils.format_datetime import format_dt
 from bot.constants.endpoints import deleteRecord, getRecordById, spinWheel
 from bot.wheel import choose_prize
-from helpers.http import backend_get, backend_delete, backend_post
+from bot.helpers.http import backend_get, backend_delete, backend_post
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ processing_records = set()
 
 class CancelCallback(CallbackData, prefix="cancel"):
     record_id: int
+    is_owner: bool
 
 
 class SpinCallback(CallbackData, prefix="spin"):
@@ -42,7 +43,7 @@ async def handle_cancel_callback(
 
     processing_records.add(callback_data.record_id)
     record_id = callback_data.record_id
-    is_owner = callback_data.record_id
+    is_owner = callback_data.is_owner
 
     try:
         res = await backend_get(f"{getRecordById}/{record_id}")
@@ -71,9 +72,14 @@ async def handle_cancel_callback(
 
     formatted_dt = format_dt(dt)
 
-    await query.message.edit_text(
-        f"✅ Ваша запись на услугу «{service_name}» {formatted_dt} по адресу «{address}» отменена"
-    )
+    if is_owner:
+        await query.message.edit_text(
+            f"✅ Запись клиента {user_record_name} на услугу «{service_name}» {formatted_dt} по адресу «{address}» отменена"
+        )
+    else:
+        await query.message.edit_text(
+            f"✅ Ваша запись на услугу «{service_name}» {formatted_dt} по адресу «{address}» отменена"
+        )
 
     processing_records.remove(callback_data.record_id)
 

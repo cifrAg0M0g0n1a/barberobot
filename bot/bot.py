@@ -21,8 +21,8 @@ from bot.constants.endpoints import (
     getUsers,
     getAllRecords,
 )
-from helpers.http import backend_post, backend_get
-from callbacks import (
+from bot.helpers.http import backend_post, backend_get
+from bot.callbacks import (
     CancelCallback,
     SpinCallback,
     handle_cancel_callback,
@@ -65,7 +65,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
             "Здесь Вы можете:\n"
             "• 📅 Записаться на удобное время, нажав на кнопку «Записаться» слева от текстового поля\n"
             "• 👀 Просмотреть или отменить свои записи - /show\n"
-            "• 📞 Получить контакт мастера - /contact\n\n"
+            "• 📞 Получить контакт мастера - /contact\n"
             "• 🎡 Прокрутить колесо фортуны - /spin\n\n"
             "Начнём? Просто используйте команды выше или введите «/» в текстовое поле для просмотра всех доступных команд 😉",
             parse_mode="HTML",

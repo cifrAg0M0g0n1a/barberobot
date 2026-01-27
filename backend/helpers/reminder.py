@@ -8,7 +8,7 @@ if str(Path(__file__).parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.database import get_user_records_for_reminder, mark_reminder_sent
-from utils.format_datetime import format_dt
+from backend.utils.format_datetime import format_dt
 from aiogram import Bot
 from settings import TIMEZONE
 from backend.utils.logger import get_logger

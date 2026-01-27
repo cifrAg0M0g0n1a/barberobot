@@ -15,7 +15,7 @@ from fastapi.middleware.cors import (
     CORSMiddleware,
 )
 from fastapi.staticfiles import StaticFiles
-from routes import router
+from backend.routes import router
 from backend.utils.logger import get_logger
 from backend.helpers.log_cleanup_task import start_log_cleanup
 from backend.helpers.backup_task import start_backup_task
