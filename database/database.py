@@ -9,10 +9,10 @@ DB_PATH = str(Path(__file__).parent.parent / "database" / "db.sqlite3")
 
 
 # ---------- Работа с пользователями ----------
-def get_user_records(user_id: int) -> List[Tuple[int, str, str, str, str]]:
+def get_user_records(user_id: int) -> List[Tuple[int, str, str, str, str, int]]:
     """
     Возвращает все записи пользователя:
-    (record_id, datetime, user_name, service_name)
+    (record_id, datetime, user_name, service_name, address, price)
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -23,7 +23,8 @@ def get_user_records(user_id: int) -> List[Tuple[int, str, str, str, str]]:
             r.datetime,
             r.name,
             s.name,
-            r.address
+            r.address,
+            s.price
         FROM records r
         JOIN services s ON s.id = r.service_id
         WHERE r.user_id = ?
@@ -36,7 +37,11 @@ def get_user_records(user_id: int) -> List[Tuple[int, str, str, str, str]]:
     return rows
 
 
-def get_all_records() -> List[Tuple[int, str, str, str, str, str, str]]:
+def get_all_records() -> List[Tuple[int, str, str, str, str, str, str, int]]:
+    """
+    Возвращает все записи:
+    (record_id, datetime, name, service_name, address, phone, username, price)
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -48,7 +53,8 @@ def get_all_records() -> List[Tuple[int, str, str, str, str, str, str]]:
             s.name,
             r.address,
             r.phone,
-            u.username
+            u.username,
+            s.price
         FROM records r
         JOIN users u ON u.id = r.user_id
         JOIN services s ON s.id = r.service_id
@@ -67,6 +73,59 @@ def delete_record(record_id: int) -> None:
     cursor.execute("DELETE FROM records WHERE id = ?", (record_id,))
     conn.commit()
     conn.close()
+
+
+def update_record_datetime(record_id: int, new_datetime: datetime) -> bool:
+    """Обновляет дату и время записи. Возвращает True при успехе."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE records SET datetime = ? WHERE id = ?",
+        (new_datetime.isoformat(sep=" "), record_id),
+    )
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def get_past_records(hours: int = 2) -> List[Tuple[int, int, str]]:
+    """
+    Возвращает записи, которые прошли более указанного количества часов назад.
+    Возвращает: (record_id, user_id, name)
+    """
+    from datetime import datetime, timedelta
+    from settings import TIMEZONE
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT r.id, r.user_id, r.name, r.datetime
+        FROM records r
+        """
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    now = datetime.now(TIMEZONE)
+    threshold = now - timedelta(hours=hours)
+
+    past_records = []
+    for record_id, user_id, name, dt_str in rows:
+        try:
+            record_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+
+            if record_dt.tzinfo is None:
+                record_dt = record_dt.replace(tzinfo=TIMEZONE)
+
+            if record_dt < threshold:
+                past_records.append((record_id, user_id, name))
+        except Exception as e:
+            continue
+
+    return past_records
 
 
 def add_user_if_not_exists(user_id: int, name: str, username: str) -> None:
@@ -113,7 +172,29 @@ def get_service(name: str) -> Optional[dict]:
     return None
 
 
+def get_service_by_id(service_id: int) -> Optional[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, price FROM services WHERE id = ?", (service_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        sid, name, price = row
+        return {"id": sid, "name": name, "price": price}
+    return None
+
+
+def get_all_services() -> List[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, price FROM services ORDER BY id")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1], "price": r[2]} for r in rows]
+
+
 def get_slots_for_date(selected_date: date) -> List[str]:
+    """Возвращает занятые слоты на дату (общие для всех услуг — одно время = одна запись)"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -390,12 +471,15 @@ def seed_services():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    cursor.execute(
+    cursor.executemany(
         """
     INSERT OR IGNORE INTO services (name, price)
     VALUES (?, ?)
     """,
-        ("Стрижка", 1500),
+        [
+            ("Стрижка", 1500),
+            ("Стрижка с бородой", 2000),
+        ],
     )
 
     conn.commit()

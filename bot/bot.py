@@ -24,8 +24,12 @@ from bot.constants.endpoints import (
 from bot.helpers.http import backend_post, backend_get
 from bot.callbacks import (
     CancelCallback,
+    EditCallback,
     SpinCallback,
+    edit_record_state,
     handle_cancel_callback,
+    handle_edit_callback,
+    handle_edit_datetime_message,
     handle_spin_callback,
 )
 from config import BOT_TOKEN, CONTACT, OWNER_ID
@@ -133,7 +137,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
         count = 1
 
         if user_id == OWNER_ID:
-            for record_id, dt, name, service_name, address, phone, username in records:
+            for record_id, dt, name, service_name, address, phone, username, price in records:
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
@@ -143,7 +147,11 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
                                     record_id=record_id,
                                     is_owner=is_owner,
                                 ).pack(),
-                            )
+                            ),
+                            InlineKeyboardButton(
+                                text="✏️ Редактировать",
+                                callback_data=EditCallback(record_id=record_id).pack(),
+                            ),
                         ]
                     ]
                 )
@@ -158,6 +166,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
                         f"📞 <i>Телефон</i>: {phone}\n"
                         f"🗓 <i>Дата и время</i>: {formatted_dt}\n"
                         f"✂️ <i>Услуга</i>: {service_name}\n"
+                        f"💸 <i>Цена</i>: {price} ₽\n"
                         f"📍 <i>Адрес</i>: {address}\n"
                         f"💬 <i>Telegram</i>: @{username}"
                     )
@@ -168,6 +177,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
                         f"📞 <i>Телефон</i>: {phone}\n"
                         f"🗓 <i>Дата и время</i>: {formatted_dt}\n"
                         f"✂️ <i>Услуга</i>: {service_name}\n"
+                        f"💸 <i>Цена</i>: {price} ₽\n"
                         f"📍 <i>Адрес</i>: {address}\n"
                         f"💬 <i>Telegram</i>: юзернейм отсутствует"
                     )
@@ -179,7 +189,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
                 )
                 count += 1
         else:
-            for record_id, dt, name, service_name, address in records:
+            for record_id, dt, name, service_name, address, price in records:
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
@@ -201,6 +211,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
                     f"👤 {name}\n"
                     f"🕒 {formatted_dt}\n"
                     f"✂️ {service_name}\n"
+                    f"💸 {price} ₽\n"
                     f"📍 {address}\n",
                     reply_markup=keyboard,
                     parse_mode="HTML",
@@ -212,6 +223,17 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
     @dp.callback_query(CancelCallback.filter())
     async def cancel_callback(query, callback_data: CancelCallback):
         await handle_cancel_callback(bot, query, callback_data)
+
+    @dp.callback_query(EditCallback.filter())
+    async def edit_callback(query, callback_data: EditCallback):
+        await handle_edit_callback(bot, query, callback_data)
+
+    @dp.message(lambda m: m.from_user and m.from_user.id in edit_record_state)
+    async def edit_datetime_handler(message: Message):
+        record_id = edit_record_state.get(message.from_user.id)
+        if record_id is None:
+            return
+        await handle_edit_datetime_message(bot, message, record_id, message.text or "")
 
     # /contact
     @dp.message(Command(commands=["contact"]))

@@ -15,3 +15,8 @@ async def backend_get(path: str):
 async def backend_delete(path: str):
     async with httpx.AsyncClient() as client:
         return await client.delete(f"{WEBAPP_URL}{path}")
+
+
+async def backend_patch(path: str, json: dict):
+    async with httpx.AsyncClient() as client:
+        return await client.patch(f"{WEBAPP_URL}{path}", json=json)

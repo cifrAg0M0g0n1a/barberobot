@@ -1,11 +1,10 @@
-let dateInput, timeSlotsContainer, serviceNameEl, servicePriceEl, addressEl;
+let dateInput, timeSlotsContainer, serviceSelectEl, servicePriceEl, addressEl;
 let nameInput, phoneInput, bookBtn, statusEl, promoCodeInput;
 let selectedTime = null;
 let userId = null;
 let username = null;
 let address = null;
-
-
+let servicesList = [];
 
 if (window.Telegram && window.Telegram.WebApp) {
     const tg = window.Telegram.WebApp;
@@ -17,12 +16,35 @@ if (window.Telegram && window.Telegram.WebApp) {
     }
 }
 
+function updatePriceByService() {
+    if (!serviceSelectEl || !servicePriceEl || !servicesList.length) return;
+    const id = parseInt(serviceSelectEl.value, 10);
+    const service = servicesList.find(s => s.id === id);
+    if (service) {
+        servicePriceEl.textContent = service.price + " ₽";
+    } else {
+        servicePriceEl.textContent = "—";
+    }
+}
+
 async function loadConfig() {
     try {
-        const serviceRes = await fetch("/service");
-        const service = await serviceRes.json();
-        if (serviceNameEl) serviceNameEl.textContent = service.name;
-        if (servicePriceEl) servicePriceEl.textContent = service.price + " ₽";
+        const servicesRes = await fetch("/services");
+        servicesList = await servicesRes.json();
+        if (!serviceSelectEl || !servicesList.length) return;
+
+        serviceSelectEl.innerHTML = "";
+        servicesList.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s.id;
+            opt.textContent = s.name;
+            serviceSelectEl.appendChild(opt);
+        });
+
+        updatePriceByService();
+        if (dateInput && dateInput.value) {
+            updateSlots(dateInput.value);
+        }
 
         const addressRes = await fetch("/address");
         const data = await addressRes.json();
@@ -30,7 +52,7 @@ async function loadConfig() {
         if (addressEl) addressEl.textContent = address;
     } catch (e) {
         console.error("Ошибка загрузки конфигурации:", e);
-        if (serviceNameEl) serviceNameEl.textContent = "Ошибка";
+        if (serviceSelectEl) serviceSelectEl.innerHTML = "<option value=''>Ошибка загрузки</option>";
         if (servicePriceEl) servicePriceEl.textContent = "Ошибка";
         if (addressEl) addressEl.textContent = "Ошибка";
     }
@@ -89,6 +111,13 @@ async function addRecord() {
         return;
     }
 
+    const serviceId = serviceSelectEl ? parseInt(serviceSelectEl.value, 10) : NaN;
+    if (!serviceId || isNaN(serviceId)) {
+        statusEl.textContent = "Выберите услугу";
+        statusEl.style.color = "#dc3545";
+        return;
+    }
+
     if (!dateInput.value || !selectedTime || !nameInput.value || !phoneInput.value) {
         statusEl.textContent = "Заполните все поля и выберите время";
         statusEl.style.color = "#dc3545";
@@ -101,19 +130,8 @@ async function addRecord() {
         return;
     }
 
-    let price = null;
-
-    try {
-        const serviceRes = await fetch("/service");
-        const service = await serviceRes.json();
-        price = service.price;
-    } catch (e) {
-        console.error("Ошибка загрузки конфигурации:", e);
-        if (serviceNameEl) serviceNameEl.textContent = "Ошибка";
-        if (servicePriceEl) servicePriceEl.textContent = "Ошибка";
-        if (addressEl) addressEl.textContent = "Ошибка";
-        price = -1;
-    }
+    const service = servicesList.find(s => s.id === serviceId);
+    const price = service ? service.price : null;
 
     const data = {
         date: dateInput.value,
@@ -124,6 +142,7 @@ async function addRecord() {
         username: username,
         address: address,
         price: price,
+        service_id: serviceId,
     };
 
     if (promoCodeInput && promoCodeInput.value.trim()) {
@@ -204,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     dateInput = document.getElementById("date");
     timeSlotsContainer = document.getElementById("timeSlots");
-    serviceNameEl = document.getElementById("serviceName");
+    serviceSelectEl = document.getElementById("serviceSelect");
     servicePriceEl = document.getElementById("servicePrice");
     addressEl = document.getElementById("address");
     nameInput = document.getElementById("userName");
@@ -213,7 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bookBtn = document.getElementById("submitBtn");
     statusEl = document.getElementById("status");
 
-    if (!dateInput || !timeSlotsContainer || !serviceNameEl || !servicePriceEl ||
+    if (!dateInput || !timeSlotsContainer || !serviceSelectEl || !servicePriceEl ||
         !addressEl || !nameInput || !phoneInput || !bookBtn || !statusEl || !promoCodeInput) {
         console.error("Не все элементы найдены на странице");
         console.error("dateInput:", dateInput, "timeSlotsContainer:", timeSlotsContainer);
@@ -254,6 +273,10 @@ document.addEventListener("DOMContentLoaded", () => {
     IMask(phoneInput, maskOptions);
 
     dateInput.addEventListener("change", (e) => updateSlots(e.target.value));
+    serviceSelectEl.addEventListener("change", () => {
+        updatePriceByService();
+        if (dateInput && dateInput.value) updateSlots(dateInput.value);
+    });
     bookBtn.addEventListener("click", addRecord);
 
     loadConfig();

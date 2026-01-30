@@ -17,7 +17,9 @@
 
             <div class="form-group">
                 <label for="date">📅 Дата</label>
-                <input type="date" id="date" name="date" required>
+                <div class="date-input-wrap">
+                    <input type="date" id="date" name="date" placeholder="Выберите дату" required>
+                </div>
             </div>
 
             <div class="form-group">
@@ -28,8 +30,9 @@
             <div class="form-group service-card">
                 <div class="service-info">
                     <span class="service-label">Услуга</span>
-                    <span id="serviceName"></span>
-
+                    <select id="serviceSelect" name="service">
+                        <option value="">Загрузка...</option>
+                    </select>
                     <span class="service-label">Цена</span>
                     <span id="servicePrice"></span>
                 </div>

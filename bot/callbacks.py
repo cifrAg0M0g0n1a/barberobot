@@ -15,19 +15,25 @@ from aiogram.filters.callback_data import (
 )
 from config import OWNER_ID
 from utils.format_datetime import format_dt
-from bot.constants.endpoints import deleteRecord, getRecordById, spinWheel
+from bot.constants.endpoints import deleteRecord, getRecordById, spinWheel, updateRecord
 from bot.wheel import choose_prize
-from bot.helpers.http import backend_get, backend_delete, backend_post
+from bot.helpers.http import backend_get, backend_delete, backend_post, backend_patch
 
 logger = logging.getLogger(__name__)
 
 
 processing_records = set()
 
+edit_record_state = {}
+
 
 class CancelCallback(CallbackData, prefix="cancel"):
     record_id: int
     is_owner: bool
+
+
+class EditCallback(CallbackData, prefix="edit"):
+    record_id: int
 
 
 class SpinCallback(CallbackData, prefix="spin"):
@@ -103,6 +109,134 @@ async def handle_cancel_callback(
             logger.error(f"Ошибка при уведомлении мастера: {e}")
 
         logger.info(f"Пользователь {user_id} отменил запись {record_id} на {dt}")
+
+
+async def handle_edit_callback(bot, query: CallbackQuery, callback_data: EditCallback):
+    """Мастер нажал «Редактировать» — просим ввести новое время"""
+    if query.from_user.id != OWNER_ID:
+        await query.answer("Только мастер может редактировать запись", show_alert=True)
+        return
+
+    record_id = callback_data.record_id
+
+    try:
+        res = await backend_get(f"{getRecordById}/{record_id}")
+        row = res.json()
+    except Exception as e:
+        logger.error(f"Не удалось получить запись {record_id}: {e}")
+        await query.answer("Ошибка загрузки записи", show_alert=True)
+        return
+
+    if not row:
+        await query.answer("Запись уже удалена", show_alert=True)
+        return
+
+    edit_record_state[query.from_user.id] = record_id
+
+    await query.message.edit_text(
+        "✏️ Введите новые дату и время в формате:\n"
+        "<b>ДД.ММ.ГГГГ ЧЧ:ММ</b>\n\n"
+        "Например: <code>15.02.2026 14:30</code>\n\n"
+        "Можно указать любое удобное время",
+        parse_mode="HTML",
+    )
+    await query.answer()
+
+
+def parse_datetime_input(text: str):
+    """
+    Парсит дату/время из сообщения.
+    Принимает: ДД.ММ.ГГГГ ЧЧ:ММ или ДД.ММ.ГГГГ ЧЧ:ММ:СС или YYYY-MM-DD HH:MM.
+    Возвращает (datetime, None) или (None, error_message)
+    """
+    from datetime import datetime
+
+    text = text.strip()
+    if "." in text and " " in text:
+        parts = text.split(maxsplit=1)
+        if len(parts) != 2:
+            return None, "Укажите дату и время через пробел, например: 15.02.2026 14:30"
+        date_part, time_part = parts
+        try:
+            day, month, year = map(int, date_part.split("."))
+            if len(time_part) == 5:  # HH:MM
+                hour, minute = map(int, time_part.split(":"))
+                second = 0
+            elif len(time_part) >= 8:  # HH:MM:SS
+                t = time_part.split(":")
+                hour, minute = int(t[0]), int(t[1])
+                second = int(t[2]) if len(t) > 2 else 0
+            else:
+                return None, "Время в формате ЧЧ:ММ или ЧЧ:ММ:СС"
+            dt = datetime(year, month, day, hour, minute, second)
+            return dt, None
+        except (ValueError, IndexError) as e:
+            return None, "Неверный формат. Пример: 15.02.2026 14:30"
+    if "-" in text and " " in text:
+        try:
+            if len(text) == 16:  # YYYY-MM-DD HH:MM
+                dt = datetime.strptime(text, "%Y-%m-%d %H:%M")
+            else:
+                dt = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+            return dt, None
+        except ValueError:
+            return None, "Неверный формат. Пример: 15.02.2026 14:30"
+    return None, "Укажите дату и время, например: 15.02.2026 14:30"
+
+
+async def handle_edit_datetime_message(bot, message, record_id: int, new_dt_str: str):
+    """
+    Обновляет время записи по API, уведомляет клиента, сбрасывает состояние
+    """
+    from backend.utils.format_datetime import format_dt
+
+    dt, err = parse_datetime_input(new_dt_str)
+    if err:
+        await message.answer(f"❌ {err}")
+        return
+
+    dt_str_api = dt.strftime("%Y-%m-%d %H:%M")
+    if dt.second:
+        dt_str_api += f":{dt.second:02d}"
+    else:
+        dt_str_api += ":00"
+
+    try:
+        res = await backend_patch(
+            f"{updateRecord}/{record_id}",
+            {"datetime": dt_str_api},
+        )
+        res.raise_for_status()
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении записи {record_id}: {e}")
+        await message.answer("Не удалось обновить запись. Попробуйте позже")
+        edit_record_state.pop(message.from_user.id, None)
+        return
+
+    edit_record_state.pop(message.from_user.id, None)
+
+    try:
+        res = await backend_get(f"{getRecordById}/{record_id}")
+        row = res.json()
+    except Exception:
+        row = None
+
+    formatted = format_dt(dt_str_api)
+    await message.answer(f"✅ Дата и время записи изменены на {formatted}")
+
+    if row:
+        user_id, name, _, _, service_name, address = row
+        try:
+            await bot.send_message(
+                user_id,
+                f"✏️ Мастер изменил дату и время вашей записи на <b>{formatted}</b>\n"
+                f"Услуга: {service_name}\nАдрес: {address}",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при уведомлении клиента {user_id}: {e}")
+
+    logger.info(f"Мастер изменил дату и время записи {record_id} на {dt_str_api}")
 
 
 async def handle_spin_callback(bot, query: CallbackQuery, callback_data: SpinCallback):

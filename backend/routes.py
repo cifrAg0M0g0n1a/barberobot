@@ -13,6 +13,8 @@ from database.database import (
     get_record,
     get_slots_for_date,
     get_service,
+    get_service_by_id,
+    get_all_services,
     add_record_cut,
     add_user_if_not_exists,
     get_user_records,
@@ -21,6 +23,7 @@ from database.database import (
     save_spin,
     get_promo_code,
     use_promo_code,
+    update_record_datetime,
 )
 from settings import (
     WORK_START,
@@ -64,25 +67,40 @@ async def get_address():
     return {"address": ADDRESS}
 
 
+@router.get("/services")
+async def get_services_list():
+    """Возвращает список всех услуг (id, name, price)."""
+    logger.info("Получение списка услуг...")
+    services = get_all_services()
+    if not services:
+        logger.error("Услуги не найдены")
+        raise HTTPException(status_code=404, detail="Services not found")
+    return [{"id": s["id"], "name": s["name"], "price": s["price"]} for s in services]
+
+
 @router.get("/service")
-async def get_service_info():
+async def get_service_info(service_id: int | None = None):
     """
-    Возвращает данные об услуге по имени
+    Возвращает данные об одной услуге: по service_id (query ?service_id=1) или первую по умолчанию.
     """
     logger.info("Получение услуги...")
-    service = get_service("Стрижка")
+    if service_id is not None:
+        service = get_service_by_id(service_id)
+    else:
+        services = get_all_services()
+        service = services[0] if services else None
     if not service:
         logger.error("Услуга не найдена")
         raise HTTPException(status_code=404, detail="Service not found")
     logger.info("Услуга успешно получена")
-    return {"name": service["name"], "price": service["price"]}
+    return {"id": service["id"], "name": service["name"], "price": service["price"]}
 
 
 @router.get("/slots")
 async def get_slots(date: str):
     """
-    Возвращает слоты для выбранной даты.
-    Формат date: 'YYYY-MM-DD'
+    Возвращает слоты для выбранной даты (общие для всех услуг — одно время = одна запись).
+    Формат date: 'YYYY-MM-DD'.
     """
     logger.info("Получение слотов времени по дате...")
 
@@ -179,8 +197,13 @@ async def add_record(request: Request):
             status_code=400, detail="Нельзя записаться на прошедшую дату"
         )
 
+    service_id = payload.get("service_id")
+    if not service_id:
+        logger.error("Не указана услуга (service_id)")
+        raise HTTPException(status_code=400, detail="Укажите услугу")
+
     logger.info("Запрос услуги...")
-    service = get_service("Стрижка")
+    service = get_service_by_id(int(service_id))
     if not service:
         logger.error("Услуга не найдена")
         raise HTTPException(status_code=404, detail="Service not found")
@@ -387,6 +410,36 @@ async def delete_record_by_id(record_id: int):
 
     logger.info(f"Запись с айди {record_id} успешна удалена")
     return {"status": "ok"}
+
+
+@router.patch("/update-record/{record_id}")
+async def update_record_by_id(record_id: int, request: Request):
+    """Обновляет дату и время записи. Тело: {"datetime": "YYYY-MM-DD HH:MM"} или {"datetime": "YYYY-MM-DD HH:MM:SS"}."""
+    body = await request.json()
+    dt_str = body.get("datetime")
+    if not dt_str:
+        raise HTTPException(status_code=400, detail="Укажите datetime")
+
+    try:
+        if len(dt_str) == 16:  # "YYYY-MM-DD HH:MM"
+            dt_str = dt_str + ":00"
+        new_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Формат даты: YYYY-MM-DD HH:MM или YYYY-MM-DD HH:MM:SS",
+        )
+
+    record = get_record(record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+
+    ok = update_record_datetime(record_id, new_dt)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Не удалось обновить запись")
+
+    logger.info(f"Запись {record_id} обновлена на {new_dt}")
+    return {"status": "ok", "datetime": new_dt.isoformat(sep=" ")}
 
 
 @router.get("/wheel/check/{user_id}")
