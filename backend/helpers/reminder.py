@@ -7,7 +7,7 @@ from apscheduler.triggers.date import DateTrigger
 if str(Path(__file__).parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from database.database import get_user_records_for_reminder, mark_reminder_sent
+from database.database import get_user_records_for_reminder, get_record, mark_reminder_sent
 from backend.utils.format_datetime import format_dt
 from aiogram import Bot
 from settings import TIMEZONE
@@ -29,9 +29,13 @@ async def send_reminder(
     address: str,
 ):
     """
-    Отправляет напоминание клиенту и помечает его в БД
+    Отправляет напоминание клиенту и помечает его в БД.
+    Если запись уже удалена (отменена), напоминание не отправляется.
     """
     try:
+        if get_record(record_id) is None:
+            logger.info(f"Запись {record_id} удалена, напоминание не отправлено")
+            return
         msg = (
             f"<b>Напоминание о записи</b>\n\n"
             f"👤 {name}\n"
@@ -132,3 +136,12 @@ async def schedule_one_reminder(
         )
     except Exception as e:
         logger.error(f"Ошибка при планировании напоминания для записи {record_id}: {e}")
+
+
+def cancel_reminder_job(record_id: int) -> None:
+    """Удаляет запланированное напоминание при отмене записи."""
+    try:
+        scheduler.remove_job(f"reminder_{record_id}")
+        logger.info(f"Напоминание для записи {record_id} отменено")
+    except Exception:
+        pass

@@ -6,7 +6,7 @@ from fastapi import (
 )
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from backend.helpers.reminder import schedule_one_reminder
+from backend.helpers.reminder import schedule_one_reminder, cancel_reminder_job
 from database.database import (
     delete_record,
     get_all_records,
@@ -406,6 +406,7 @@ async def get_record_by_id(record_id: int):
 @router.delete("/delete-record/{record_id}")
 async def delete_record_by_id(record_id: int):
     logger.info(f"Удаление записи с айди {record_id}...")
+    cancel_reminder_job(record_id)
     delete_record(record_id)
 
     logger.info(f"Запись с айди {record_id} успешна удалена")
