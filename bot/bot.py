@@ -7,9 +7,12 @@ from aiogram.types import (
     Message,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    BufferedInputFile,
 )
 import sys
 from pathlib import Path
+from openpyxl import Workbook
+from io import BytesIO
 
 if str(Path(__file__).parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -137,57 +140,52 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
         count = 1
 
         if user_id == OWNER_ID:
-            for record_id, dt, name, service_name, address, phone, username, price in records:
-                keyboard = InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="❌ Отменить",
-                                callback_data=CancelCallback(
-                                    record_id=record_id,
-                                    is_owner=is_owner,
-                                ).pack(),
-                            ),
-                            InlineKeyboardButton(
-                                text="✏️ Редактировать",
-                                callback_data=EditCallback(record_id=record_id).pack(),
-                            ),
-                        ]
-                    ]
-                )
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Записи"
 
+            ws.append([
+                "№",
+                "Клиент",
+                "Телефон",
+                "Дата и время",
+                "Услуга",
+                "Цена",
+                "Адрес",
+                "Telegram"
+            ])
+
+            count = 1
+
+            for record_id, dt, name, service_name, address, phone, username, price in records:
                 formatted_dt = format_dt(dt)
 
-                msg = ""
-                if username != "":
-                    msg = (
-                        f"<b>Запись {count}</b>\n\n"
-                        f"👤 <i>Клиент</i>: {name}\n"
-                        f"📞 <i>Телефон</i>: {phone}\n"
-                        f"🗓 <i>Дата и время</i>: {formatted_dt}\n"
-                        f"✂️ <i>Услуга</i>: {service_name}\n"
-                        f"💸 <i>Цена</i>: {price} ₽\n"
-                        f"📍 <i>Адрес</i>: {address}\n"
-                        f"💬 <i>Telegram</i>: @{username}"
-                    )
-                else:
-                    msg = (
-                        f"<b>Запись {count}</b>\n\n"
-                        f"👤 <i>Клиент</i>: {name}\n"
-                        f"📞 <i>Телефон</i>: {phone}\n"
-                        f"🗓 <i>Дата и время</i>: {formatted_dt}\n"
-                        f"✂️ <i>Услуга</i>: {service_name}\n"
-                        f"💸 <i>Цена</i>: {price} ₽\n"
-                        f"📍 <i>Адрес</i>: {address}\n"
-                        f"💬 <i>Telegram</i>: юзернейм отсутствует"
-                    )
+                ws.append([
+                    count,
+                    name,
+                    phone,
+                    formatted_dt,
+                    service_name,
+                    price,
+                    address,
+                    f"@{username}" if username else "—"
+                ])
 
-                await message.answer(
-                    msg,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                )
                 count += 1
+
+            file_stream = BytesIO()
+            wb.save(file_stream)
+            file_stream.seek(0)
+
+            file = BufferedInputFile(
+                file_stream.read(),
+                filename="records.xlsx"
+            )
+
+            await message.answer_document(
+                file,
+                caption="📊 Все записи"
+            )
         else:
             for record_id, dt, name, service_name, address, price in records:
                 keyboard = InlineKeyboardMarkup(
